@@ -101,6 +101,19 @@ func parseOtpauthURL(uri string) (*OTPConfig, error) {
 	}, nil
 }
 
+// 去重函数
+func uniqueAccounts(accounts []OTPConfig) []OTPConfig {
+	seen := make(map[string]bool)
+	var result []OTPConfig
+	for _, a := range accounts {
+		if !seen[a.Label] {
+			seen[a.Label] = true
+			result = append(result, a)
+		}
+	}
+	return result
+}
+
 // 本地账户操作
 func loadAccounts() ([]OTPConfig, error) {
 	if _, err := os.Stat(accountFile); os.IsNotExist(err) {
@@ -121,10 +134,11 @@ func loadAccounts() ([]OTPConfig, error) {
 	if err := json.Unmarshal(data, &accounts); err != nil {
 		return nil, err
 	}
-	return accounts, nil
+	return uniqueAccounts(accounts), nil
 }
 
 func saveAccounts(accounts []OTPConfig) error {
+	accounts = uniqueAccounts(accounts)
 	data, _ := json.MarshalIndent(accounts, "", "  ")
 	return os.WriteFile(accountFile, data, 0644)
 }
@@ -138,34 +152,59 @@ func removeAccount(accounts []OTPConfig, label string) ([]OTPConfig, bool) {
 	return accounts, false
 }
 
-// 显示 TOTP
-func displayAccounts(accounts []OTPConfig) {
-	clearScreen()
-	fmt.Println(Bold + Cyan + "🔐 多账户动态 TOTP 管理器" + Reset)
-	fmt.Println(strings.Repeat("=", 40))
+// 显示 TOTP（无闪烁版本）
+func displayAccounts(accounts []OTPConfig, firstDraw bool) {
+	if firstDraw {
+		// 第一次完整绘制所有静态信息
+		fmt.Print("\033[H\033[2J")
+		fmt.Println(Bold + Cyan + "🔐 多账户动态 TOTP 管理器" + Reset)
+		fmt.Println(strings.Repeat("=", 40))
+		for _, cfg := range accounts {
+			if cfg.Issuer != "" {
+				fmt.Printf("服务提供者: %s\n", cfg.Issuer)
+			}
+			fmt.Printf("账户: %s\n", cfg.Label)
+			fmt.Printf("算法: %s | 步长: %ds\n", cfg.Algorithm, cfg.Period)
+			fmt.Printf("验证码: \n")
+			fmt.Printf("剩余时间: \n")
+			fmt.Println(strings.Repeat("-", 40))
+		}
+		fmt.Println("按 Ctrl+C 退出")
+		return
+	}
+
+	// 移动光标到标题下方（回顶部，不清屏）
+	// 跳过标题两行 + 分隔线一行
+	fmt.Printf("\033[%d;0H", 3) // 移动到第3行
+
 	now := time.Now()
-	for _, cfg := range accounts {
+
+	for i, cfg := range accounts {
 		code, start, end, err := totp.GenerateCurrentTOTP(cfg.Secret, cfg.Algorithm)
 		if err != nil {
 			fmt.Printf("%s❌ 生成失败: %v%s\n", Red, err, Reset)
 			continue
 		}
+
 		total := end.Sub(start).Seconds()
 		left := int(end.Sub(now).Seconds())
+		if left < 0 {
+			left = 0
+		}
 		if left <= 5 {
 			beep()
 		}
-		if cfg.Issuer != "" {
-			fmt.Printf("服务提供者: %s\n", cfg.Issuer)
-		}
-		fmt.Printf("账户: %s\n", cfg.Label)
-		fmt.Printf("算法: %s | 步长: %ds\n", cfg.Algorithm, cfg.Period)
-		fmt.Printf("验证码: %s%s%s\n", Green, code, Reset)
-		fmt.Printf("有效时间: %s ~ %s\n", start.Format("15:04:05"), end.Format("15:04:05"))
-		fmt.Printf("剩余时间: %2d 秒 [%s]\n", left, progressBar(total, float64(left)))
-		fmt.Println(strings.Repeat("-", 40))
+
+		// 计算当前账户在屏幕上的起始行
+		// 每个账户块为 6 行（含分隔线）
+		startLine := 3 + i*6
+		// 移动到对应账户的“验证码”那一行
+		fmt.Printf("\033[%d;0H", startLine+3)
+		fmt.Printf("验证码: %s%s%s   \n", Green, code, Reset)
+
+		// 下一行更新剩余时间
+		fmt.Printf("剩余时间: %2d 秒 [%s]   \n", left, progressBar(total, float64(left)))
 	}
-	fmt.Println("按 Ctrl+C 退出")
 }
 
 // Run 主程序
@@ -322,12 +361,20 @@ func Run() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
+
+	// 隐藏光标
+	fmt.Print("\033[?25l")
+	defer fmt.Print("\033[?25h") // 程序退出时恢复光标
+
+	displayAccounts(selectedAccounts, true) // 首次完整绘制
 	for {
 		select {
 		case <-ticker.C:
-			displayAccounts(selectedAccounts)
+			displayAccounts(selectedAccounts, false) // 仅局部更新
 		case <-sigChan:
-			fmt.Println("\n👋 已退出。")
+			fmt.Print("\033[?25h") // 显示光标
+			fmt.Print("\r\033[2K") // 清空当前行
+			fmt.Println("👋 已退出。")
 			return
 		}
 	}
