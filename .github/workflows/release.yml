@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # 获取完整历史，方便 changelog
+
+      # 自动创建 go.sum，如果不存在
+      - name: Ensure go.sum exists
+        run: |
+          if [ ! -f go.sum ]; then
+            touch go.sum
+          fi
+
+      - name: Ensure tag points to a commit
+        run: |
+          TAG_REF=${GITHUB_REF##*/}
+          if [ -z "$(git rev-list -n 1 $TAG_REF)" ]; then
+            echo "Tag $TAG_REF does not point to a commit. Creating empty commit..."
+            git commit --allow-empty -m "chore: release $TAG_REF"
+            git tag -f $TAG_REF
+            git push origin $TAG_REF --force
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.25
+
+      - name: Set version tag
+        run: |
+          # 去掉前缀 v
+          VERSION=${GITHUB_REF##*/} 
+          VERSION=${VERSION#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Build binaries
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          FILENAME=go-totp-${VERSION}-${GOOS}-${GOARCH}
+          if [ "$GOOS" = "windows" ]; then
+            FILENAME="${FILENAME}.exe"
+          fi
+          GOOS=$GOOS GOARCH=$GOARCH go build -o dist/$FILENAME
+          
+          # 生成 SHA256 校验和
+          sha256sum dist/$FILENAME > dist/$FILENAME.sha256
+
+      - name: Generate changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v3
+        with:
+          configuration: .github/changelog-config.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.PUBLIC_WORKFLOWS_ACCESS_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }} - TOTP in Go.
+          body: ${{ steps.changelog.outputs.changelog }}
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.PUBLIC_WORKFLOWS_ACCESS_TOKEN }}

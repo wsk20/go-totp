@@ -1,0 +1,18 @@
+{
+	"template": "# 🚀 更新日志 - {{VERSION}} ({{DATE}})\n\n{{CHANGELOG}}",
+	"categories": [
+		{
+			"title": "<summary>✨ 新功能 / Features</summary>",
+			"labels": ["feature", "enhancement"]
+		},
+		{
+			"title": "<summary>🐛 修复 / Fixes</summary>",
+			"labels": ["bug"]
+		},
+		{
+			"title": "<summary>🧰 其他更新 / Chores</summary>",
+			"labels": ["chore", "refactor", "docs"]
+		}
+	],
+	"pr_template": "- {{title}} (#{{number}}) by @{{author}}"
+}

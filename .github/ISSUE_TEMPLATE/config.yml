@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask questions
+    url: https://github.com/wsk20/go-totp/discussions
+    about: Please ask questions in Discussions.
+  - name: Make a proposal
+    url: https://github.com/wsk20/go-totp/discussions/categories/proposal
+    about: Please make proposals in Discussions.
+  - name: 提问
+    url: https://github.com/wsk20/go-totp/discussions
+    about: 请在讨论区提出您的问题。
+  - name: 提出建议
+    url: https://github.com/wsk20/go-totp/discussions/categories/proposal
+    about: 请在讨论区提交您的建议。
