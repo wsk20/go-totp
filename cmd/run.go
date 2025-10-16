@@ -156,7 +156,7 @@ func removeAccount(accounts []OTPConfig, label string) ([]OTPConfig, bool) {
 func displayAccounts(accounts []OTPConfig, firstDraw bool) {
 	if firstDraw {
 		// 第一次完整绘制所有静态信息
-		fmt.Print("\033[H\033[2J")
+		clearScreen()
 		fmt.Println(Bold + Cyan + "🔐 多账户动态 TOTP 管理器" + Reset)
 		fmt.Println(strings.Repeat("=", 40))
 		for _, cfg := range accounts {
@@ -372,8 +372,9 @@ func Run() {
 		case <-ticker.C:
 			displayAccounts(selectedAccounts, false) // 仅局部更新
 		case <-sigChan:
-			fmt.Print("\033[?25h") // 显示光标
-			fmt.Print("\r\033[2K") // 清空当前行
+			fmt.Print("\033[?25h")      // 恢复光标显示
+			fmt.Print("\r\033[2K")      // 清空当前行
+			fmt.Println("\033[H\033[J") // 清空屏幕
 			fmt.Println("👋 已退出。")
 			return
 		}
