@@ -1,0 +1,23 @@
+# 统一换行符为 LF（避免 Git 提示 CRLF/LF 转换警告）
+*.go text eol=lf
+*.sh text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Windows 专用文件可以保留 CRLF（比如 bat）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制文件（不做行尾转换）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.exe binary
+*.dll binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.pdf binary

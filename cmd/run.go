@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -27,9 +28,6 @@ const (
 	Cyan   = "\033[36m"
 	Bold   = "\033[1m"
 )
-
-// 数据文件
-var accountFile = os.ExpandEnv("$HOME/.totp_accounts.json")
 
 type OTPConfig struct {
 	Label     string         `json:"label"`
@@ -114,30 +112,48 @@ func uniqueAccounts(accounts []OTPConfig) []OTPConfig {
 	return result
 }
 
+// GetAccountFilePath 获取平台兼容的 .totp_accounts.json 文件路径
+func GetAccountFilePath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("无法获取用户主目录: %w", err)
+	}
+
+	// 拼接路径：~/ .totp_accounts.json
+	accountFile := filepath.Join(home, ".totp_accounts.json")
+
+	return accountFile, nil
+}
+
 // 本地账户操作
-func loadAccounts() ([]OTPConfig, error) {
-	if _, err := os.Stat(accountFile); os.IsNotExist(err) {
+func loadAccounts() ([]OTPConfig, string, error) {
+	// 获取账户文件路径
+	accountFile, err := GetAccountFilePath()
+	if err != nil {
+		return nil, "", fmt.Errorf("❌ 获取账户文件路径失败: %v", err)
+	}
+	if _, err = os.Stat(accountFile); os.IsNotExist(err) {
 		// 文件不存在，创建空文件
 		emptyData := []byte("[]")
-		if err := os.WriteFile(accountFile, emptyData, 0644); err != nil {
-			return nil, fmt.Errorf("创建账户文件失败: %v", err)
+		if err = os.WriteFile(accountFile, emptyData, 0644); err != nil {
+			return nil, "", fmt.Errorf("创建账户文件失败: %v", err)
 		}
-		return []OTPConfig{}, nil
+		return []OTPConfig{}, accountFile, nil
 	}
 
 	data, err := os.ReadFile(accountFile)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	var accounts []OTPConfig
 	if err := json.Unmarshal(data, &accounts); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return uniqueAccounts(accounts), nil
+	return uniqueAccounts(accounts), accountFile, nil
 }
 
-func saveAccounts(accounts []OTPConfig) error {
+func saveAccounts(accounts []OTPConfig, accountFile string) error {
 	accounts = uniqueAccounts(accounts)
 	data, _ := json.MarshalIndent(accounts, "", "  ")
 	return os.WriteFile(accountFile, data, 0644)
@@ -223,7 +239,7 @@ func Run() {
 
 	flag.Parse()
 
-	accounts, err := loadAccounts()
+	accounts, accsountFile, err := loadAccounts()
 	if err != nil {
 		log.Fatalf("读取账户失败: %v", err)
 	}
@@ -251,7 +267,7 @@ func Run() {
 			fmt.Printf("⚠️ 已存在相同账户，已更新: %s\n", cfg.Label)
 		}
 
-		if err := saveAccounts(accounts); err != nil {
+		if err := saveAccounts(accounts, accsountFile); err != nil {
 			log.Fatalf("保存账户失败: %v", err)
 		}
 		return
@@ -264,7 +280,7 @@ func Run() {
 			log.Fatalf("账户不存在: %s", *removeLabel)
 		}
 		accounts = newAccs
-		if err := saveAccounts(accounts); err != nil {
+		if err := saveAccounts(accounts, accsountFile); err != nil {
 			log.Fatalf("保存账户失败: %v", err)
 		}
 		fmt.Printf("✅ 删除成功: %s\n", *removeLabel)
@@ -332,7 +348,7 @@ func Run() {
 			fmt.Printf("⚠️ 已存在相同账户，已更新: %s\n", cfg.Label)
 		}
 
-		if err := saveAccounts(accounts); err != nil {
+		if err := saveAccounts(accounts, accsountFile); err != nil {
 			log.Fatalf("保存账户失败: %v", err)
 		}
 		return
