@@ -1,5 +1,7 @@
 # 多账户 TOTP 管理器
 
+[English Version](README_en.md)
+
 一个基于 Go 的 **多账户 TOTP（时间一次性密码）管理器**，支持：
 
 - 从 `otpauth://` URI 添加账户  
